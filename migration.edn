@@ -1,0 +1,1 @@
+{:schema "etzhayyim.migration/repository-v1" :source-revision "5006135ed0a8d0dfc720099e9a87427deade3747" :source-path "60-apps/kotoba-erp" :canonical-files ["README.edn" "migration.edn"]}

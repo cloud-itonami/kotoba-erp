@@ -1,0 +1,9 @@
+;; Scoped bb.edn for the kotoba-erp clj port (ADR-2606280030).
+;; Self-contained: the port uses an in-repo StateGraph shim (kotoba-erp.graph)
+;; and clojure.test only, so no langgraph-clj / langchain-clj dep is required.
+;; Does NOT touch the repo-root bb.edn.
+{:paths ["src" "test"]
+ :tasks
+ {test {:doc "Run the kotoba-erp clojure.test suite under babashka."
+        :extra-paths ["test"]
+        :task (load-file "run_tests.clj")}}}

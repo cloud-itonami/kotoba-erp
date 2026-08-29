@@ -1,0 +1,232 @@
+(ns kotoba-erp.fi.post-journal
+  ;; FI (Financial Accounting) journal posting -- the product semantics of the
+  ;; `fi` module, as one Kotoba `kotoba/app` vertical slice.
+  ;;
+  ;;   init ()               -> state
+  ;;   step (state, event)   -> next state
+  ;;
+  ;; `step` is the whole path the python/clj `fi/app` graph walked:
+  ;;
+  ;;   event -> route -> (map an MM goods receipt) -> parse into BKPF/BSEG
+  ;;         -> validate the balance rule -> post or reject
+  ;;         -> emit inert persistence effects
+  ;;
+  ;; Both exports are pure, so this module compiles with an EMPTY
+  ;; `requiredCapabilities`. It touches no store, no clock and no socket. The
+  ;; two things the guest cannot know are handed to it as ordinary event
+  ;; fields: `:now` (the host's clock reading) and nothing else. What the guest
+  ;; produces instead of writing is `:effects` -- an inert vector of quad
+  ;; descriptions the host drains and executes
+  ;; (see `clj/src/kotoba_erp/fi/effects.cljc`).
+  ;;
+  ;; Amounts are i64 MINOR UNITS (`:amount-minor`, `:total-value-minor`), not
+  ;; the `.cljc` oracle's doubles. This is not a workaround for a gap; it is
+  ;; the correct accounting representation, and it makes the balance rule an
+  ;; exact `=` instead of the oracle's `(< (abs (- d c)) 0.0001)`. It is ALSO
+  ;; forced: the guest grammar's `:arithmetic` set is `#{+ - * quot bit-xor
+  ;; bit-and bit-or}` over i64 only. `:f64` exists as a *value* (`document-f64`)
+  ;; but there is no admitted f64 operator -- `(+ a b)` on two `:f64` params is
+  ;; rejected with "expression type mismatch: expected i64, got f64" (measured
+  ;; 2026-08-30). The float builtins that do exist are f32 only, and f32 is
+  ;; worse than i64 for money, not better. If an f64 arithmetic surface lands,
+  ;; that does not change this module: minor units stay correct.
+  ;;
+  ;; Three bounds are real and none of them is hidden:
+  ;;
+  ;;   * A `:document` holds 256 nodes. The state this module returns carries
+  ;;     the BKPF *and* the effects for one posting, which crosses that budget
+  ;;     at roughly a dozen line items. That is the honest ceiling on one
+  ;;     journal entry today, and it is a value-budget question rather than
+  ;;     anything this module can fix.
+  ;;   * Line numbers (`buzei`) top out at 99, because Kotoba has no
+  ;;     integer-to-string builtin and `num2` reads digits out of a literal
+  ;;     (the same gap the todo-app example and the css migration hit). A wider
+  ;;     app wants that builtin, not a wider literal. The document budget above
+  ;;     binds first, so this is not the limit anyone reaches.
+  ;;   * Instance fuel is 512 charges. One `step` over a two-line entry spends
+  ;;     well under that; a host that wants many postings gives each one a
+  ;;     fresh instance rather than sharing one.
+  (:export [init step route-of entry-of bkpf-of balanced? errors-of
+            effects-of outcome-of]))
+
+;; --- document accessors ---------------------------------------------------
+
+(defn dget [d :document k :keyword] :document
+  (option-value-of [:option :document] (document-get d k) (document-null)))
+
+(defn dvec [d :document k :keyword] :document
+  (option-value-of [:option :document] (document-get d k) (document-vector)))
+
+(defn ds [d :document] :string
+  (option-value-of [:option :string] (document-string-value d) ""))
+
+(defn di [d :document] :i64
+  (option-value-of [:option :i64] (document-i64-value d) 0))
+
+(defn dat [v :document i :i64] :document
+  (option-value-of [:option :document] (document-vector-at v i) (document-null)))
+
+(defn str-or [d :document k :keyword fallback :string] :string
+  (option-value-of [:option :string] (document-string-value (dget d k)) fallback))
+
+(defn i64-or [d :document k :keyword fallback :i64] :i64
+  (option-value-of [:option :i64] (document-i64-value (dget d k)) fallback))
+
+(defn bool-or [d :document k :keyword fallback :bool] :bool
+  (option-value-of [:option :bool] (document-bool-value (dget d k)) fallback))
+
+;; --- line numbering -------------------------------------------------------
+
+(defn digits [] :string "0123456789")
+
+(defn digit [n :i64] :string
+  (string-substring (digits) n (+ n 1)))
+
+(defn num2 [n :i64] :string
+  (cond
+    (< n 0) "0"
+    (< n 10) (digit n)
+    (< n 100) (string-concat (digit (quot n 10)) (digit (- n (* (quot n 10) 10))))
+    :else "99+"))
+
+;; --- routing (port of process_event) --------------------------------------
+
+(defn route-of [event :document] :string
+  (if (string=? (str-or event :event-type "") "GoodsReceiptPosted")
+    "map_mm_receipt"
+    "direct_journal"))
+
+(defn gr-line [account :string amount :i64 debit :bool desc :string] :document
+  (document-map :account-id (document-string account)
+                :amount-minor (document-i64 amount)
+                :is-debit (document-bool debit)
+                :description (document-string desc)))
+
+(defn mm-entry [event :document] :document
+  (let [rid (str-or event :receipt-id "UNKNOWN")
+        po (str-or event :po-number "UNKNOWN")
+        total (i64-or event :total-value-minor 0)
+        desc (string-concat
+              (string-concat (string-concat "Goods Receipt " rid) " for PO ")
+              po)]
+    (document-map
+     :entry-id (document-string (string-concat "JE-" rid))
+     :lines (document-vector
+             (gr-line "1300" total true desc)
+             (gr-line "2110" total false desc)))))
+
+(defn entry-of [event :document] :document
+  (if (string=? (route-of event) "map_mm_receipt")
+    (mm-entry event)
+    event))
+
+;; --- parse into BKPF/BSEG (port of post_journal/parse-entry) ---------------
+
+(defn bseg-of [line :document belnr :string idx :i64] :document
+  (document-map
+   :belnr (document-string belnr)
+   :buzei (document-string (num2 (+ idx 1)))
+   :hkont (document-string (str-or line :account-id ""))
+   :shkzg (document-string (if (bool-or line :is-debit true) "S" "H"))
+   :wrbtr (document-i64 (i64-or line :amount-minor 0))
+   :sgtxt (document-string (str-or line :description ""))))
+
+(defn bseg-items [lines :document i :i64 n :i64 belnr :string acc :document] :document
+  (if (>= i n)
+    acc
+    (bseg-items lines (+ i 1) n belnr
+                (document-vector-conj acc (bseg-of (dat lines i) belnr i)))))
+
+(defn bkpf-of [entry :document now :string] :document
+  (let [belnr (str-or entry :entry-id "TEMP")
+        lines (dvec entry :lines)]
+    (document-map
+     :belnr (document-string belnr)
+     :bukrs (document-string "1000")
+     :bldat (document-string now)
+     :budat (document-string now)
+     :bstat (document-string "V")
+     :items (bseg-items lines 0 (document-count lines) belnr (document-vector)))))
+
+;; --- the balance rule (port of entities/validate-balance) ------------------
+
+(defn side-total [items :document i :i64 n :i64 want :bool acc :i64] :i64
+  (if (>= i n)
+    acc
+    (let [it (dat items i)
+          hit (if want
+                (string=? (ds (dget it :shkzg)) "S")
+                (string=? (ds (dget it :shkzg)) "H"))]
+      (side-total items (+ i 1) n want
+                  (if hit (+ acc (di (dget it :wrbtr))) acc)))))
+
+(defn balanced? [bkpf :document] :bool
+  (let [items (dvec bkpf :items)
+        n (document-count items)]
+    (= (side-total items 0 n true 0)
+       (side-total items 0 n false 0))))
+
+(defn errors-of [bkpf :document] :document
+  (if (balanced? bkpf)
+    (document-vector)
+    (document-vector
+     (document-string "Accounting Document (BKPF) does not balance."))))
+
+;; --- inert persistence effects (what the repository adapter used to do) ----
+
+(defn quad [subject :string predicate :string object :document] :document
+  (document-map :kind (document-string "assert-quad")
+                :graph (document-string "fi_journal")
+                :subject (document-string subject)
+                :predicate (document-string predicate)
+                :object object))
+
+(defn header-object [bkpf :document] :document
+  (document-map
+   :belnr (document-string (str-or bkpf :belnr ""))
+   :bukrs (document-string (str-or bkpf :bukrs ""))
+   :bldat (document-string (str-or bkpf :bldat ""))
+   :budat (document-string (str-or bkpf :budat ""))
+   :bstat (document-string (str-or bkpf :bstat ""))))
+
+(defn item-quads [items :document i :i64 n :i64 subject :string acc :document] :document
+  (if (>= i n)
+    acc
+    (item-quads items (+ i 1) n subject
+                (document-vector-conj
+                 acc (quad subject "erp:fi:bseg_item" (dat items i))))))
+
+(defn effects-of [bkpf :document] :document
+  (let [items (dvec bkpf :items)
+        subject (string-concat "bkpf:" (str-or bkpf :belnr ""))]
+    (item-quads items 0 (document-count items) subject
+                (document-vector
+                 (quad subject "erp:fi:bkpf_header" (header-object bkpf))))))
+
+;; --- the governed transition ----------------------------------------------
+
+(defn outcome-of [event :document now :string] :document
+  (let [draft (bkpf-of (entry-of event) now)
+        errs (errors-of draft)
+        ok (= (document-count errs) 0)]
+    (document-map
+     :route (document-string (route-of event))
+     :status (document-string (if ok "POSTED" "REJECTED"))
+     :entry-id (document-string (str-or draft :belnr ""))
+     :errors errs
+     :bkpf (document-assoc draft :bstat (document-string (if ok "" "R"))))))
+
+(defn step [state :document event :document] :document
+  (let [out (outcome-of event (str-or event :now "1970-01-01T00:00:00Z"))
+        ok (string=? (str-or out :status "") "POSTED")]
+    (document-map
+     :posted (document-i64 (+ (i64-or state :posted 0) (if ok 1 0)))
+     :rejected (document-i64 (+ (i64-or state :rejected 0) (if ok 0 1)))
+     :last out
+     :effects (if ok (effects-of (dget out :bkpf)) (document-vector)))))
+
+(defn init [] :document
+  (document-map :posted (document-i64 0)
+                :rejected (document-i64 0)
+                :last (document-null)
+                :effects (document-vector)))

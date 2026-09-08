@@ -9,7 +9,7 @@
   Availability is measured by EXECUTING the compiler, never by `which`. There
   is more than one binary called `kotoba` on a developer machine and the other
   one rejects `-M` outright, so a PATH hit is not evidence."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [kotoba-erp.kotoba-doc :as doc]
             ["node:child_process" :as cp]
             ["node:fs" :as fs]

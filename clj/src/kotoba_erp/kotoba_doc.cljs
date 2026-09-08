@@ -15,7 +15,7 @@
 
   This is a JS-host codec, so it is `.cljs` rather than `.cljc` on purpose:
   there is no BigInt on the JVM and no honest `:clj` branch to write."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (declare ->doc)
 

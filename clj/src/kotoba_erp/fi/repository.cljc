@@ -2,7 +2,7 @@
   "FI Interface Adapter — Gateway/Repository.
   Port of fi_module/src/adapters/repository.py. Translates BKPF/BSEG entities
   to/from store quads. The store is injected (substrate boundary)."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [kotoba-erp.store :as store]
             [kotoba-erp.util :as u]
             [kotoba-erp.fi.entities :as e]))

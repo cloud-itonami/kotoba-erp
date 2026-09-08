@@ -9,7 +9,7 @@
 ;;
 ;; Usage:  nbb --classpath src:test run_parity.cljs
 (ns run-parity
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [kotoba-erp.store :as store]
             [kotoba-erp.fi.app :as oracle]
             [kotoba-erp.fi.effects :as fx]

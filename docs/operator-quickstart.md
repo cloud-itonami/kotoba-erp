@@ -17,7 +17,7 @@ bb --version      # verified against v1.12.218
 
 > `nbb` does not work here, and it is worth knowing why before you try it. The
 > suite dies at load with `Unable to resolve symbol: cljs.core/ExceptionInfo`,
-> because `clj/test/kotoba_erp/graph_test.cljc:21` names that symbol in a
+> because `clj/test/kotoba_erp/graph_test.cljk:21` names that symbol in a
 > `#?(:cljs ...)` branch and sci does not resolve it. `bb` is the only host that
 > runs this repo today.
 
@@ -168,7 +168,7 @@ log — those branches become reachable. That is the seam to inject at.
   the only code that touches it.
 - **Inspect what was written.** `mem-store` captures every quad and event, so
   `@(:quads s)` and `@(:events s)` show exactly what a posting persisted and
-  published. `clj/test/kotoba_erp/fi_test.cljc` uses this directly.
+  published. `clj/test/kotoba_erp/fi_test.cljk` uses this directly.
 - **Read a graph.** Each `app.cljc` is the whole control flow of its module in
   about 20 lines of `add-node` / `add-edge` / `add-conditional-edges`.
 - **Boundaries and caveats** are in [`../README.md`](../README.md); the

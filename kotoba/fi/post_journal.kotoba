@@ -17,7 +17,7 @@
   ;; fields: `:now` (the host's clock reading) and nothing else. What the guest
   ;; produces instead of writing is `:effects` -- an inert vector of quad
   ;; descriptions the host drains and executes
-  ;; (see `clj/src/kotoba_erp/fi/effects.cljc`).
+  ;; (see `clj/src/kotoba_erp/fi/effects.cljk`).
   ;;
   ;; Amounts are i64 MINOR UNITS (`:amount-minor`, `:total-value-minor`), not
   ;; the `.cljc` oracle's doubles. This is not a workaround for a gap; it is

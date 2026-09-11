@@ -1,6 +1,6 @@
-#!/usr/bin/env bb
+#!/usr/bin/env kbb
 ;; Test runner for the kotoba-erp clj port (repo rule: run_tests.clj, NOT .sh).
-;; Usage:  bb run_tests.clj   (or)  bb test
+;; Usage:  kbb run_tests.cljk   (or)  bb test
 (require '[clojure.test :as t])
 
 (def test-namespaces

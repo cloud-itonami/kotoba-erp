@@ -1,4 +1,4 @@
-#!/usr/bin/env nbb
+#!/usr/bin/env kbb
 ;; Parity gate for the `.kotoba` FI journal-posting slice.
 ;;
 ;;   exit 0  every scenario agreed          (and at least one scenario ran)
@@ -7,7 +7,7 @@
 ;;           zero scenarios) -- deliberately NOT 0, so "skipped" and "passed"
 ;;           are not the same value.
 ;;
-;; Usage:  nbb --classpath src:test run_parity.cljs
+;; Usage:  kbb --backend sci --classpath src:test run_parity.cljs
 (ns run-parity
   (:require [kotoba.lang.text :as str]
             [kotoba-erp.store :as store]

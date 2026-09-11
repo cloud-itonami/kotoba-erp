@@ -30,7 +30,7 @@ cd clj
 ## 1. Run the suite
 
 ```bash
-bb run_tests.clj
+kbb run_tests.cljk
 ```
 
 ```
@@ -48,7 +48,7 @@ Each module's `run` takes an already-decoded payload map and returns a status
 map. Nothing here speaks CBOR; encoding is the WASM host's edge.
 
 ```bash
-bb --classpath src -e '
+kbb --classpath src -e '
 (require (quote [kotoba-erp.fi.app :as fi]))
 (prn (fi/run {:entry-id "JE-1001"
               :lines [{:account-id "1000" :amount 250.0 :is-debit true  :description "Cash"}
@@ -62,7 +62,7 @@ bb --classpath src -e '
 Now break the balance — debit 250, credit 100:
 
 ```bash
-bb --classpath src -e '
+kbb --classpath src -e '
 (require (quote [kotoba-erp.fi.app :as fi]))
 (prn (fi/run {:entry-id "JE-1002"
               :lines [{:account-id "1000" :amount 250.0 :is-debit true}
@@ -84,7 +84,7 @@ lines — inventory 1300 debit, GR/IR clearing 2110 credit — before running th
 same posting flow:
 
 ```bash
-bb --classpath src -e '
+kbb --classpath src -e '
 (require (quote [kotoba-erp.fi.app :as fi]))
 (prn (fi/run {:event-type "GoodsReceiptPosted"
               :receipt-id "GR-77" :po-number "PO-9" :total-value 1500.0}))'
@@ -100,7 +100,7 @@ tell a routed posting from a direct one.
 ## 4. Goods receipt (MM), billing (SD), opportunity close (CRM)
 
 ```bash
-bb --classpath src -e '
+kbb --classpath src -e '
 (require (quote [kotoba-erp.mm.app :as mm]) (quote [kotoba-erp.sd.app :as sd])
          (quote [kotoba-erp.crm.app :as crm]))
 (println "MM ok:   " (pr-str (mm/run {:mblnr "GR-5001" :ebeln "PO-1000" :usnam "OPERATOR"
@@ -138,7 +138,7 @@ and dispatches on the predicate alone, so a lookup for any id gets the one
 seeded record back. Bill a sales order that does not exist:
 
 ```bash
-bb --classpath src -e '
+kbb --classpath src -e '
 (require (quote [kotoba-erp.sd.app :as sd]))
 (prn (sd/run {:billing-id "INV-2002" :order-id "SO-NOPE"}))'
 ```

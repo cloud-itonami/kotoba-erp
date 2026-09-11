@@ -31,7 +31,7 @@ test/kotoba_erp/ {graph,fi,crm,mm,sd}_test.cljc
 
 ```bash
 # Suite. `bb` is retired in this workspace, so run the same runner on the JVM:
-clojure -Sdeps '{:paths ["src" "test"]}' -M run_tests.clj   # 15 tests / 54 assertions
+kbb -Sdeps '{:paths ["src" "test"]}' -M run_tests.clj   # 15 tests / 54 assertions
 
 # Parity gate for the .kotoba FI slice (see ../kotoba/fi/post_journal.kotoba).
 # exit 0 = every scenario agreed, 1 = the guest and the oracle disagreed,
@@ -40,7 +40,7 @@ clojure -Sdeps '{:paths ["src" "test"]}' -M run_tests.clj   # 15 tests / 54 asse
 # KOTOBA_BIN is only needed outside the west layout; in
 # orgs/cloud-itonami/kotoba-erp the compiler is found at ../../kotoba-lang/amu.
 KOTOBA_BIN=/path/to/orgs/kotoba-lang/amu/bin/kotoba \
-  nbb --classpath src:test run_parity.cljs                 # 8 scenarios
+  kbb --backend sci --classpath src:test run_parity.cljs                 # 8 scenarios
 ```
 
 ## Substrate boundary

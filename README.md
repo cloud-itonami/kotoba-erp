@@ -52,7 +52,7 @@ Every module follows the same four-layer shape:
 ## Running it
 
 ```bash
-cd clj && bb run_tests.clj      # 15 tests, 54 assertions
+cd clj && kbb run_tests.cljk      # 15 tests, 54 assertions
 ```
 
 Worked examples for all four modules, with their actual output, are in
